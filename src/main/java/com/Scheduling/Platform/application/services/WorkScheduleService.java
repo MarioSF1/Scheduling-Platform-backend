@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -40,5 +41,35 @@ public class WorkScheduleService {
         schedule.setLunchEnd(dto.lunchEnd());
 
         repository.save(schedule);
+    }
+
+    @Transactional
+    public void saveFullWeek(UUID employeeId, List<WorkScheduleRequest> schedules, String requesterEmail) {
+        var employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new EntityNotFoundException("Funcionário não encontrado"));
+
+        if (!employee.getStore().getOwner().getEmail().equals(requesterEmail)) {
+            throw new BusinessException("Acesso negado: Você não gerencia este funcionário.");
+        }
+
+        for (WorkScheduleRequest dto : schedules) {
+            // Validação básica de consistência
+            if (dto.startTime().isAfter(dto.endTime())) {
+                throw new BusinessException("Erro no dia " + dto.dayOfWeek() + ": Início após o fim.");
+            }
+
+            // Busca se já existe um registro para esse dia da semana
+            var schedule = repository.findByEmployeeIdAndDayOfWeek(employeeId, dto.dayOfWeek())
+                    .orElse(new WorkSchedule());
+
+            schedule.setEmployee(employee);
+            schedule.setDayOfWeek(dto.dayOfWeek());
+            schedule.setStartTime(dto.startTime());
+            schedule.setEndTime(dto.endTime());
+            schedule.setLunchStart(dto.lunchStart());
+            schedule.setLunchEnd(dto.lunchEnd());
+
+            repository.save(schedule);
+        }
     }
 }
