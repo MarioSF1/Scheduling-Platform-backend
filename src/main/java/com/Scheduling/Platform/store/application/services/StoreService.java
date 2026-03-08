@@ -1,5 +1,6 @@
 package com.Scheduling.Platform.store.application.services;
 
+import com.Scheduling.Platform.auth.application.services.UserService;
 import com.Scheduling.Platform.store.application.dtos.StoreRequest;
 import com.Scheduling.Platform.store.application.dtos.StoreResponse;
 import com.Scheduling.Platform.exception.InvalidCredentialsException;
@@ -8,12 +9,14 @@ import com.Scheduling.Platform.auth.domain.model.User;
 import com.Scheduling.Platform.store.domain.repository.EmployeeRepository;
 import com.Scheduling.Platform.store.domain.repository.StoreRepository;
 import com.Scheduling.Platform.auth.domain.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -22,16 +25,17 @@ public class StoreService {
 
     private final StoreRepository storeRepository;
     private final UserRepository userRepository;
+    private final UserService userService;
     private final EmployeeRepository employeeRepository;
 
     @Transactional
-    public Store createStore(StoreRequest request, String ownerEmail) {
+    public Store createStore(StoreRequest request) {
         // 1. Busca o usuário pelo email vindo do Token
-        var owner = userRepository.findByEmail(ownerEmail)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        var owner = userService.userByEmail(request.ownerEmail())
+                .orElseThrow(() -> new EntityNotFoundException("Usuário com o email informado não encontrado"));
 
         // 2. Valida se o slug já existe
-        if (storeRepository.findBySlug(request.slug()).isPresent()) {
+        if (storeFindBySlug(request.slug()).isPresent()) {
             throw new RuntimeException("Este endereço (slug) já está em uso");
         }
 
@@ -48,8 +52,8 @@ public class StoreService {
 
     @Transactional(readOnly = true)
     public List<StoreResponse> getMyStores(String email) {
-        var user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new InvalidCredentialsException("Usuário não encontrado"));
+        var user = userService.userByEmail(email)
+                .orElseThrow(() -> new EntityNotFoundException("Usuário não encontrado"));
 
         // 1. Busca as lojas onde ele é o dono
         List<Store> ownedStores = storeRepository.findByOwnerId(user.getId());
@@ -81,5 +85,9 @@ public class StoreService {
                 store.getSlug(),
                 role
         );
+    }
+
+    public Optional<Store> storeFindBySlug (String slug) {
+        return storeRepository.findBySlug(slug);
     }
 }
